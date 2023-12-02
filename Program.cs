@@ -10,7 +10,7 @@ builder.Services.AddRazorPages();
 builder.Services.AddServerSideBlazor();
 builder.Services.AddSingleton<WeatherForecastService>();
 
-builder.Services.AddTelerikBlazor();
+//builder.Services.AddTelerikBlazor();
 
 // Upload file size limit on ASP.NET Core
 builder.Services.Configure<FormOptions>(options =>
