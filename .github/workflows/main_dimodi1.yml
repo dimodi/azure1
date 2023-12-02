@@ -24,6 +24,8 @@ jobs:
 
       - name: Build with dotnet
         run: dotnet build --configuration Release
+        env:
+          MY_API_KEY: ${{ secrets.TELERIKAZURE1 }}
 
       - name: dotnet publish
         run: dotnet publish -c Release -o ${{env.DOTNET_ROOT}}/myapp
