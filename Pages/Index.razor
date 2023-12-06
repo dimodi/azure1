@@ -7,68 +7,308 @@
 
 <PageTitle>Index</PageTitle>
 
-<h1>Hello, Telerik Blazor and EF Core!</h1>
+<div style="position:relative;">
+    <TelerikLoaderContainer Visible="@LoaderContainerVisible" />
+    <TelerikScheduler Data="@SchedulerData"
+                      @bind-Date="@SelectedDate"
+                      @bind-View="@CurrentSchedulerView"
+                      AllowCreate="true"
+                      AllowUpdate="true"
+                      AllowDelete="true"
+                      OnCreate="@OnSchedulerCreate"
+                      OnUpdate="@OnSchedulerUpdate"
+                      OnDelete="@OnSchedulerDelete"
+                      Width="calc(100vw - 300px)"
+                      Height="600px">
+        <SchedulerSettings>
+            <SchedulerGroupSettings Resources="@GroupingResources"
+                                    Orientation="@SchedulerGroupOrientation.Horizontal" />
+        </SchedulerSettings>
+        <SchedulerViews>
+            <SchedulerDayView StartTime="@StartTime" />
+            <SchedulerWeekView StartTime="@StartTime" />
+            <SchedulerMultiDayView StartTime="@StartTime" />
+            <SchedulerMonthView />
+        </SchedulerViews>
+        <SchedulerResources>
+            <SchedulerResource Field="Room" Title="Edit Room" Data="@SchedulerResources" />
+        </SchedulerResources>
+    </TelerikScheduler>
+</div>
 
-<h2>Categories</h2>
+@code {
+    private bool LoaderContainerVisible { get; set; } = true;
 
-<TelerikGrid Data="@CategoryData"
-             EditMode="@GridEditMode.Incell"
-             OnUpdate="@OnCategoryUpdate"
-             OnCreate="@OnCategoryCreate"
-             OnDelete="OnCategoryDelete"
-             ConfirmDelete="true">
-    <GridToolBarTemplate>
-        <GridCommandButton Command="Add" Icon="@SvgIcon.Plus">Add Category</GridCommandButton>
-    </GridToolBarTemplate>
-    <GridColumns>
-        <GridColumn Field="@nameof(Category.Id)" Editable="false" Width="60px" />
-        <GridColumn Field="@nameof(Category.Name)" />
-        <GridCommandColumn Width="160px">
-            <GridCommandButton Command="Delete" Icon="@SvgIcon.Trash">Delete</GridCommandButton>
-        </GridCommandColumn>
-    </GridColumns>
-</TelerikGrid>
+    private AppointmentService appointmentService = new();
+    private ResourceService resourceService = new();
 
-<h2>Products</h2>
+    private SchedulerView CurrentSchedulerView { get; set; } = SchedulerView.Week;
 
-<TelerikGrid Data="@ProductData"
-             EditMode="@GridEditMode.Inline"
-             OnUpdate="@OnProductUpdate"
-             OnCreate="@OnProductCreate"
-             OnDelete="OnProductDelete"
-             ConfirmDelete="true">
-    <GridToolBarTemplate>
-        @if (CategoryData.Any())
+    private DateTime SelectedDate { get; set; } = DateTime.Now.Date;
+    private DateTime StartTime { get; set; } = DateTime.Now.Date.AddHours(7);
+
+    private List<Appointment> SchedulerData = new List<Appointment>();
+    private List<Resource> SchedulerResources = new List<Resource>();
+    List<Resource> SchedulerManagers = new List<Resource>();
+
+    private List<string> GroupingResources = new List<string> { "Room" };
+
+    private void OnSchedulerUpdate(SchedulerUpdateEventArgs args)
+    {
+        Appointment item = (Appointment)args.Item;
+
+        var matchingItem = SchedulerData.FirstOrDefault(a => a.Id == item.Id);
+
+        if (matchingItem != null)
         {
-            <GridCommandButton Command="Add" Icon="@SvgIcon.Plus">Add Product</GridCommandButton>
+            matchingItem.Title = item.Title;
+            matchingItem.Description = item.Description;
+            matchingItem.Start = item.Start;
+            matchingItem.End = item.End;
+            matchingItem.IsAllDay = item.IsAllDay;
+            matchingItem.Room = item.Room;
+            matchingItem.Manager = item.Manager;
         }
-        else
+    }
+
+    private void OnSchedulerCreate(SchedulerCreateEventArgs args)
+    {
+        Appointment item = (Appointment)args.Item;
+
+        SchedulerData.Add(item);
+    }
+
+    private void OnSchedulerDelete(SchedulerDeleteEventArgs args)
+    {
+        Appointment item = (Appointment)args.Item;
+
+        SchedulerData.Remove(item);
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        SchedulerResources = await resourceService.GetResourcesAsync();
+        SchedulerManagers = await resourceService.GetManagersAsync();
+        SchedulerData = await appointmentService.GetAppointmentsAsync();
+
+        LoaderContainerVisible = false;
+    }
+
+    public class AppointmentService
+    {
+        public async Task<List<Appointment>> GetAppointmentsAsync()
         {
-            <text>Add categories to add products.</text>
+            await Task.Delay(1000);
+
+            return GetAppointments();
         }
-    </GridToolBarTemplate>
-    <GridColumns>
-        <GridColumn Field="@nameof(Product.Id)" Editable="false" Width="60px" />
-        <GridColumn Field="@nameof(Product.Name)" />
-        <GridColumn Field="@nameof(Product.CategoryId)" Title="Category">
-            <Template>
-                @{ var gridItem = (Product)context; }
-                @CategoryData.Find(x => x.Id == gridItem.CategoryId)?.Name
-            </Template>
-            <EditorTemplate>
-                @{ var gridEditItem = (Product)context; }
-                <TelerikDropDownList Data="@CategoryData"
-                                     @bind-Value="@gridEditItem.CategoryId"
-                                     ValueField="@nameof(Category.Id)"
-                                     TextField="@nameof(Category.Name)"
-                                     DefaultText="Select Category..." />
-            </EditorTemplate>
-        </GridColumn>
-        <GridCommandColumn Width="240px">
-            <GridCommandButton Command="Edit" Icon="@SvgIcon.Pencil">Edit</GridCommandButton>
-            <GridCommandButton Command="Delete" Icon="@SvgIcon.Trash">Delete</GridCommandButton>
-            <GridCommandButton Command="Save" Icon="@SvgIcon.Save" ShowInEdit="true">Update</GridCommandButton>
-            <GridCommandButton Command="Cancel" Icon="@SvgIcon.Cancel" ShowInEdit="true">Cancel</GridCommandButton>
-        </GridCommandColumn>
-    </GridColumns>
-</TelerikGrid>
+
+        public List<Appointment> GetAppointments()
+        {
+            List<Appointment> data = new List<Appointment>();
+            DateTime baselineTime = GetStartTime();
+
+            for (int i = 1; i <= 500; i++)
+            {
+                var startHours1 = 24 * i + Random.Shared.Next(0, 3);
+                var startHours2 = 24 * i + Random.Shared.Next(5, 8);
+
+                data.Add(new Appointment
+                {
+                    Title = $"{i}-1 Test Appointment {i}-1",
+                    Description = $"Description for Test Appointment {i}-2",
+                    Start = baselineTime.AddHours(startHours1),
+                    End = baselineTime.AddHours(startHours1).AddMinutes(30 * Random.Shared.Next(1, 6)),
+                    Room = "1"
+                });
+
+                data.Add(new Appointment
+                {
+                    Title = $"{i}-2 Test Appointment {i}-2",
+                    Description = $"Description for Test Appointment {i}-2",
+                    Start = baselineTime.AddHours(startHours2),
+                    End = baselineTime.AddHours(startHours2).AddMinutes(30 * Random.Shared.Next(1, 5)),
+                    Room = "1"
+                });
+
+                data.Add(new Appointment
+                {
+                    Title = $"{i}-3 Test Appointment {i}-3",
+                    Description = $"Description for Test Appointment {i}-3",
+                    Start = baselineTime.AddHours(startHours1),
+                    End = baselineTime.AddHours(startHours1).AddMinutes(30 * Random.Shared.Next(1, 6)),
+                    Room = "2"
+                });
+
+                data.Add(new Appointment
+                {
+                    Title = $"{i}-4 Test Appointment {i}-4",
+                    Description = $"Description for Test Appointment {i}-4",
+                    Start = baselineTime.AddHours(startHours2),
+                    End = baselineTime.AddHours(startHours2).AddMinutes(30 * Random.Shared.Next(1, 5)),
+                    Room = "2"
+                });
+            }
+
+            return data;
+        }
+
+        public DateTime GetStartTime()
+        {
+            DateTime dt = DateTime.Now;
+            int daysSinceMonday = dt.DayOfWeek - DayOfWeek.Monday;
+
+            return new DateTime(dt.Year, dt.Month, dt.Day - daysSinceMonday, 8, 0, 0);
+        }
+    }
+
+    public class ResourceService
+    {
+        public async Task<List<Resource>> GetResourcesAsync()
+        {
+            await Task.Delay(0);
+
+            return GetResources();
+        }
+
+        public List<Resource> GetResources()
+        {
+            List<Resource> result = new List<Resource>();
+
+            result.Add(new Resource()
+            {
+                Text = "Small meeting room",
+                Value = "1",
+                Color = "#66ccff"
+            });
+            result.Add(new Resource()
+            {
+                Text = "Big meeting room",
+                Value = "2",
+                Color = "#0066ff"
+            });
+
+            return result;
+        }
+
+        public async Task<List<Resource>> GetManagersAsync()
+        {
+            await Task.Delay(0);
+
+            return GetManagers();
+        }
+
+        public List<Resource> GetManagers()
+        {
+            List<Resource> result = new List<Resource>();
+
+            result.Add(new Resource()
+            {
+                Text = "Alex",
+                Value = "1",
+                Color = "#390"
+            });
+            result.Add(new Resource()
+            {
+                Text = "Bob",
+                Value = "2",
+                Color = "#369"
+            });
+
+            return result;
+        }
+    }
+
+    public class Resource
+    {
+        public string Text { get; set; } = string.Empty;
+        public string Value { get; set; } = string.Empty;
+        public string Color { get; set; } = string.Empty;
+    }
+
+    public class Appointment
+    {
+        public Guid Id { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public DateTime Start { get; set; }
+        public DateTime End { get; set; }
+        public bool IsAllDay { get; set; }
+        public string Description { get; set; } = string.Empty;
+        public string Room { get; set; } = string.Empty;
+        public string Manager { get; set; } = string.Empty;
+
+        public Appointment()
+        {
+            var rand = new Random();
+            Id = Guid.NewGuid();
+            Room = rand.Next(1, 3).ToString();
+            Manager = rand.Next(1, 3).ToString();
+        }
+    }
+}
+
+@*<h1>Hello, Telerik Blazor and EF Core!</h1>
+
+    <h2>Categories</h2>
+
+    <TelerikGrid Data="@CategoryData"
+                 EditMode="@GridEditMode.Incell"
+                 OnUpdate="@OnCategoryUpdate"
+                 OnCreate="@OnCategoryCreate"
+                 OnDelete="OnCategoryDelete"
+                 ConfirmDelete="true">
+        <GridToolBarTemplate>
+            <GridCommandButton Command="Add" Icon="@SvgIcon.Plus">Add Category</GridCommandButton>
+        </GridToolBarTemplate>
+        <GridColumns>
+            <GridColumn Field="@nameof(Category.Id)" Editable="false" Width="60px" />
+            <GridColumn Field="@nameof(Category.Name)" />
+            <GridCommandColumn Width="160px">
+                <GridCommandButton Command="Delete" Icon="@SvgIcon.Trash">Delete</GridCommandButton>
+            </GridCommandColumn>
+        </GridColumns>
+    </TelerikGrid>
+
+    <h2>Products</h2>
+
+    <TelerikGrid Data="@ProductData"
+                 EditMode="@GridEditMode.Inline"
+                 OnUpdate="@OnProductUpdate"
+                 OnCreate="@OnProductCreate"
+                 OnDelete="OnProductDelete"
+                 ConfirmDelete="true">
+        <GridToolBarTemplate>
+            @if (CategoryData.Any())
+            {
+                <GridCommandButton Command="Add" Icon="@SvgIcon.Plus">Add Product</GridCommandButton>
+            }
+            else
+            {
+                <text>Add categories to add products.</text>
+            }
+        </GridToolBarTemplate>
+        <GridColumns>
+            <GridColumn Field="@nameof(Product.Id)" Editable="false" Width="60px" />
+            <GridColumn Field="@nameof(Product.Name)" />
+            <GridColumn Field="@nameof(Product.CategoryId)" Title="Category">
+                <Template>
+                    @{ var gridItem = (Product)context; }
+                    @CategoryData.Find(x => x.Id == gridItem.CategoryId)?.Name
+                </Template>
+                <EditorTemplate>
+                    @{ var gridEditItem = (Product)context; }
+                    <TelerikDropDownList Data="@CategoryData"
+                                         @bind-Value="@gridEditItem.CategoryId"
+                                         ValueField="@nameof(Category.Id)"
+                                         TextField="@nameof(Category.Name)"
+                                         DefaultText="Select Category..." />
+                </EditorTemplate>
+            </GridColumn>
+            <GridCommandColumn Width="240px">
+                <GridCommandButton Command="Edit" Icon="@SvgIcon.Pencil">Edit</GridCommandButton>
+                <GridCommandButton Command="Delete" Icon="@SvgIcon.Trash">Delete</GridCommandButton>
+                <GridCommandButton Command="Save" Icon="@SvgIcon.Save" ShowInEdit="true">Update</GridCommandButton>
+                <GridCommandButton Command="Cancel" Icon="@SvgIcon.Cancel" ShowInEdit="true">Cancel</GridCommandButton>
+            </GridCommandColumn>
+        </GridColumns>
+    </TelerikGrid>*@
